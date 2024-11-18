@@ -20,14 +20,33 @@ namespace CertInfo
             // Check if the required arguments are provided
             if (args.Length < 1)
             {
-                Console.WriteLine("Usage: cert-info <hostname|url> [port]");
+                Console.WriteLine("Usage: cert-info <hostname|url> [-p port]");
                 return;
             }
 
             // Parse command-line arguments
             string input = args[0];
             string hostname = GetHostnameFromInput(input);
-            int port = args.Length > 1 && int.TryParse(args[1], out int parsedPort) ? parsedPort : 443;
+            int port = 443; // default port
+
+            // Parse port from either -p flag or direct argument
+            for (int i = 1; i < args.Length; i++)
+            {
+                if (args[i] == "-p" && i + 1 < args.Length)
+                {
+                    if (!int.TryParse(args[i + 1], out port))
+                    {
+                        WriteLineWithColor("Invalid port number.", ConsoleColor.Red);
+                        return;
+                    }
+                    break;
+                }
+                else if (int.TryParse(args[i], out int parsedPort))
+                {
+                    port = parsedPort;
+                    break;
+                }
+            }
 
             if (string.IsNullOrEmpty(hostname))
             {
@@ -38,7 +57,7 @@ namespace CertInfo
             try
             {
                 Console.WriteLine($"Fetching certificate details for {hostname}:{port}...");
-                X509Certificate2 cert = GetCertificate(hostname, port);
+                X509Certificate2? cert = GetCertificate(hostname, port);
 
                 if (cert != null)
                 {
@@ -118,7 +137,7 @@ namespace CertInfo
         /// <returns>The X509Certificate2 instance if successful; null otherwise.</returns>
         /// <exception cref="ArgumentNullException">Thrown when hostname is null or empty.</exception>
         /// <exception cref="SocketException">Thrown when connection cannot be established.</exception>
-        private static X509Certificate2 GetCertificate(string hostname, int port)
+        private static X509Certificate2? GetCertificate(string hostname, int port)
         {
             if (string.IsNullOrWhiteSpace(hostname))
                 throw new ArgumentNullException(nameof(hostname));
@@ -129,7 +148,6 @@ namespace CertInfo
             try
             {
                 using var client = new TcpClient();
-                // Set timeout to avoid hanging
                 if (!client.ConnectAsync(hostname, port).Wait(5000))
                 {
                     throw new TimeoutException($"Connection to {hostname}:{port} timed out");
@@ -140,8 +158,32 @@ namespace CertInfo
                     false,
                     (sender, certificate, chain, errors) => true);
 
-                // Set timeout for SSL authentication
-                sslStream.AuthenticateAsClient(hostname);
+                if (port == 587 || port == 25)  // SMTP ports
+                {
+                    var networkStream = client.GetStream();
+                    var buffer = new byte[1024];
+                    
+                    // Read greeting
+                    networkStream.Read(buffer, 0, buffer.Length);
+                    
+                    // Send EHLO
+                    var ehloCommand = System.Text.Encoding.ASCII.GetBytes($"EHLO {hostname}\r\n");
+                    networkStream.Write(ehloCommand, 0, ehloCommand.Length);
+                    networkStream.Read(buffer, 0, buffer.Length);
+
+                    // Send STARTTLS
+                    var starttlsCommand = System.Text.Encoding.ASCII.GetBytes("STARTTLS\r\n");
+                    networkStream.Write(starttlsCommand, 0, starttlsCommand.Length);
+                    networkStream.Read(buffer, 0, buffer.Length);
+
+                    // Now start TLS
+                    sslStream.AuthenticateAsClient(hostname);
+                }
+                else
+                {
+                    // Direct SSL/TLS for other ports
+                    sslStream.AuthenticateAsClient(hostname);
+                }
 
                 return sslStream.RemoteCertificate != null 
                     ? new X509Certificate2(sslStream.RemoteCertificate) 
