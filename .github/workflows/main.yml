@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Build
+      run: dotnet build
+    
+    - name: Test Certificate Checks
+      run: |
+        # Test GitHub hostname
+        output=$(dotnet run -- github.com)
+        if ! echo "$output" | grep -q "Subject.*github.com"; then
+          echo "GitHub hostname test failed"
+          exit 1
+        fi
+        
+        # Test HTTPS URL
+        output=$(dotnet run -- https://www.github.com)
+        if ! echo "$output" | grep -q "Subject.*github.com"; then
+          echo "GitHub HTTPS URL test failed"
+          exit 1
+        fi
+        
+        # Test SMTP
+        output=$(dotnet run -- smtp.gmail.com 587)
+        if ! echo "$output" | grep -q "Subject.*gmail.com"; then
+          echo "Gmail SMTP test failed"
+          exit 1
+        fi
+        
+        echo "All tests passed successfully!"
