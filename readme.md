@@ -20,7 +20,7 @@ Requires .NET Core 8.0
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/cert-info.git
+git clone https://github.com/tfindleton/cert-info.git
 
 # Build the project
 dotnet build
