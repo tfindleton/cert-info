@@ -79,8 +79,6 @@ The tool uses color-coding to indicate certificate status:
 - 🟢 **Green**: Valid certificate with more than 30 days until expiration
 - 🟡 **Yellow**: Certificate expiring within 30 days
 - 🔴 **Red**: Expired certificate or connection error
-- 🔵 **Cyan**: Interface elements
-- 🟣 **Purple**: Certificate thumbprint
 
 ## Error Handling
 
